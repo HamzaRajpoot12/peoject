@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block body %}
+    <div class="container my-3">
+        <h2>Add a Record</h2>
+        <form action="/add" method="POST">
+            <div class="mb-3">
+              <label for="title" class="form-label">Stud roll no</label>
+              <input type="text" class="form-control" name="roll_number" id="title" aria-describedby="emailHelp">
+            </div>
+            <div class="mb-3">
+              <label for="desc" class="form-label">Stud name</label>
+              <input type="text" class="form-control" name="name" id="desc">
+            </div>
+            <div class="mb-3">
+              <label for="fee" class="form-label">Fee Status</label>
+              <input type="text" class="form-control" name="fee" id="fee">
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="margin-top: 2%;" >Submit</button>
+          </form>
+    </div>
+{%endblock%}

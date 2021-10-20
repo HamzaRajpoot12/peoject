@@ -1,135 +1,122 @@
-from os import name
-from flask import Flask, render_template, request, redirect,session
+# from flask_dropzone import Dropzone
+from flask import Flask ,render_template, url_for ,request,redirect,flash
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from werkzeug.utils import secure_filename
+from flask_sqlalchemy import SQLAlchemy
+import os
+import random
+import string
+# basedir=os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://root:hamza1234@localhost:3306/fee"
-app.config['SECRET_KEY'] = "tHIS iS MY first program"
+# app.config.update(
+#     UPLOADED_PATH=os.path.join(basedir,'uploads'),
+#     DROPZONE_MAX_FILE_SIZE = 1024,
+#     DROPZONE_TIMEOUT = 5*60*1000)
+# dropzone = Dropzone(app)
+
+
+UPLOAD_FOLDER='uploads'
+app.secret_key = "Secret_Key"
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config["SQLALCHEMY_DATABASE_URI"]="sqlite:///site.db"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
 db = SQLAlchemy(app)
 
-class Fee(db.Model):
-    __tablename__ ="fee"
-    id = db.Column(db.Integer, primary_key=True)
-    roll_number = db.Column(db.String(200), nullable=False)
-    name = db.Column(db.String(200), nullable=False)
-    fee = db.Column(db.String(500), nullable=False)
-    date_created = db.Column(db.DateTime, default=datetime.utcnow)
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+class News (db.Model) :
+    id=db.Column(db.Integer,primary_key=True)
+    title=db.Column(db.String(100))
+    description=db.Column(db.Text)
+    photos = db.relationship('Photo', backref = 'owner')
 
+    def __init__(self,title,description):
+         self.title=title
+         self.description=description
+         
+    def __repr__(self):
+        return '{title:'+self.title+', description:'+str(self.description)+ '}'     
 
-class Login(db.Model):
-    __tablename__:"login"
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(200), nullable=False)
-    password = db.Column(db.String(200), nullable=False)
-    name = db.Column(db.String(200), nullable=False)
-    age = db.Column(db.String(200), nullable=False)
+class Photo(db.Model):
+    # id, photoURL, personId
+    id = db.Column(db.Integer, primary_key = True)
 
+    photoURL = db.Column(db.String())
 
+    news_id = db.Column(db.Integer, db.ForeignKey('news.id') )
 
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        
-        username = request.form.get("username")
-        password = request.form.get("password")
-      
-        user = Login.query.filter_by(username=username , password=password).first()
-    
-        if user:
-            session["name"] = user.username
-            return redirect("/")
-
-    return render_template("login.html")   
-    
-
-@app.route('/add', methods=['GET', 'POST'])
-def add():
-    if request.method == 'POST':
-        
-        roll_number = request.form.get("roll_number")
-        name = request.form.get("name")
-        fee = request.form.get("fee")
-
-        user = Fee(roll_number=roll_number,name=name,fee=fee)
-        db.session.add(user)
-        db.session.commit()
-        return redirect("/entry")       
-
-@app.route('/', methods=['GET', 'POST'])
-def hello_world():
-    if session.get("name"):
-       return render_template('base.html')
-    else:
-        return render_template("login.html")
-
-@app.route("/register", methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        
-        username = request.form.get("username")
-        password = request.form.get("password")
-        name = request.form.get("name")
-        age = request.form.get("age")
-
-        user = Login(username=username,password=password,name=name,age=age)
-        db.session.add(user)
-        db.session.commit()
-        return redirect("/")        
-    return render_template("register.html")
-
-
-
-
-@app.route("/logout", methods=['GET', 'POST'])
-def logout():
-    session['name'] = []
-    return redirect('/')
-
-
-
-@app.route('/show')
-def products():
-    if session.get("name"):
-        allfee = Fee.query.all()
-        return render_template('show.html', allfee=allfee)
-    else:
-        return render_template("login.html")
-
-@app.route('/update/<int:id>', methods=['GET', 'POST'])
-def update(id):
+@app.route('/')
+def index():
+    allnews=News.query.all()
+    return render_template ("index.html",alls=allnews)
+   
+@app.route('/create', methods=['POST','GET'])
+def insert():
     if request.method=='POST':
-        roll_number = request.form['roll_number']
-        name = request.form['name']
-        feestatus = request.form['fee']
-        fee = Fee.query.filter_by(id=id).first()
-        fee.name=name
-        fee.roll_number=roll_number
-        fee.fee=feestatus   
-        db.session.add(fee)
+        title = request.form["title"]
+        description = request.form['description']
+        files = request.files.getlist('photo[]')
+        print(files)
+
+        if len(files) == 0:
+            flash("No selected file !")
+            return redirect(url_for('index'))
+
+        new = News(title, description)
+
+        db.session.add(new)
+
+        for image in files:
+            if allowed_file(image.filename):
+                filename =  secure_filename(image.filename)
+                image.save(os.path.join('static', filename))
+
+                newPhoto = Photo(photoURL = filename, owner = new)
+                db.session.add(newPhoto)
+
         db.session.commit()
-        return redirect("/show")
-
-    fee = Fee.query.filter_by(id=id).first()
-    return render_template('update.html', fee=fee)
-
-@app.route('/entry')
-def entry():
-    if session.get("name"):
-
-        return render_template("insert.html")
+        flash("Post Successfully Created!")
+        return redirect(url_for('index'))
     else:
-        return render_template("login.html")
+        return render_template('create.html')    
 
-@app.route('/delete/<int:id>')
+@app.route('/delete/<id>/',methods=['GET'])
 def delete(id):
-    fee = Fee.query.filter_by(id=id).first()
-    db.session.delete(fee)
+    selectednews=News.query.get(id)
+    # for image in selectednews.photos:
+    #     os.remove(os.path.join('static',image.photoURL))
+    db.session.delete(selectednews)
     db.session.commit()
-    return redirect("/show")
+    return redirect(url_for('index'))
 
-if __name__ == "__main__":
-    app.run(debug=True, port=8000)
+@app.route('/edit/<int:id>/',methods=['GET', 'POST'])
+def edit(id):
+    selectednews=News.query.get(id)
+    if request.method=='POST':
+        selectednews.title=request.form['title']
+        selectednews.description=request.form['description']
+        files=request.files.getlist('photo[]')
+        for file in selectednews.photos:
+            os.remove(os.path.join('static', file.photoURL))
+            db.session.delete(file)
+        for file in files:
+            if allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                file.save(os.path.join('static',filename))
+                newphoto=Photo(photoURL=filename,owner=selectednews)
+                db.session.add(newphoto)
+                db.session.commit()
+        db.session.commit()    
+        return redirect(url_for('index'))
+        
+    return render_template('edit.html',all=selectednews)
+
+
+
+if __name__=='__main__':
+    app.run(debug=True)        
